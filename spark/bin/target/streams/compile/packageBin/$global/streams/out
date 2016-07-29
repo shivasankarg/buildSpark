@@ -1,0 +1,9 @@
+[0m[[0minfo[0m] [0mPackaging /home/seamus4318/qw/spark/bin/target/scala-2.11/test_2.11-1.0.jar ...[0m
+[0m[[0mdebug[0m] [0mInput file mappings:[0m
+[0m[[0mdebug[0m] [0m	test.class[0m
+[0m[[0mdebug[0m] [0m	  /home/seamus4318/qw/spark/bin/target/scala-2.11/classes/test.class[0m
+[0m[[0mdebug[0m] [0m	test$.class[0m
+[0m[[0mdebug[0m] [0m	  /home/seamus4318/qw/spark/bin/target/scala-2.11/classes/test$.class[0m
+[0m[[0mdebug[0m] [0m	test$$anonfun$1.class[0m
+[0m[[0mdebug[0m] [0m	  /home/seamus4318/qw/spark/bin/target/scala-2.11/classes/test$$anonfun$1.class[0m
+[0m[[0minfo[0m] [0mDone packaging.[0m
