@@ -81,6 +81,7 @@ class SpecialLengths(object):
     TIMING_DATA = -3
     END_OF_STREAM = -4
     NULL = -5
+    COMPUTATION_TIME_DATA = -6
 
 
 class Serializer(object):
@@ -146,7 +147,13 @@ class FramedSerializer(Serializer):
             transformationStartTime = time.time() 
             # socketTotalTime += transformationStartTime - transformationEndTime
             # print("socketTotalTime is " + str(socketTotalTime))
-        self._write_with_length(str(transformationTotalTime), stream)
+        if(transformationTotalTime != 0):
+            write_int(SpecialLengths.COMPUTATION_TIME_DATA, stream)
+            if(transformationTotalTime < 0.0001):
+                transformationTotalTime*=1000000
+                self._write_with_length("sm"+str(transformationTotalTime)+"e", stream)
+            else:
+                self._write_with_length("s"+str(transformationTotalTime)+"e", stream)
         # print("\n\nsocketTotalTime is " + str(socketTotalTime))
         # print("transformationTotalTime is " + str(transformationTotalTime))
         # print("\n\ntotalTime is " + str(time.time() - temp))

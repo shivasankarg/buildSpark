@@ -164,20 +164,6 @@ def main(infile, outfile):
 
         def process():
             iterator = deserializer.load_stream(infile)
-            # temp = func(split_index, iterator)
-            # tmp = temp
-            # print("return value type is ")
-            # print(type(temp))
-            # print("\n\npartition after filter")
-            # print("\n\ntmp\n")
-            # try:
-            #     j = 0
-            #     while j<5:
-            #         val = tmp.next()
-            #         print(val)
-            #         j+=1
-            # except StopIteration:
-            #     print("iterator pointer returned . Iteration done.")
             serializer.dump_stream(func(split_index, iterator), outfile)
 
         if profiler:
