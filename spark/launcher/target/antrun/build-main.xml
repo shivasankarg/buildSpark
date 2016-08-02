@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <project name="maven-antrun-" default="main"  >
 <target name="main">
-  <mkdir dir="/home/seamus4318/qw/spark/launcher/target/tmp"/>
+  <mkdir dir="/home/seamus4318/stash/sparkpa/spark/launcher/target/tmp"/>
 </target>
 </project>

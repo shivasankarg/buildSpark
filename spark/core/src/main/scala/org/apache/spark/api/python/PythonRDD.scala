@@ -26,6 +26,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.language.existentials
 import scala.util.control.NonFatal
+import scala.util.control._
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.io.compress.CompressionCodec
@@ -65,11 +66,6 @@ private[spark] class PythonRDD(
     }
     val runner = PythonRunner(func, bufferSize, reuse_worker)
     val tempRet = runner.compute(firstParent.iterator(split, context), split.index, context)
-    // println("list is ")
-    // this.timesList.foreach(println)
-    // val temp = tempRet
-    // val timee = temp.next()
-    // println("\n\n\n Time is " + timee + "\n\n\n")
     tempRet
   }
 }
@@ -147,8 +143,10 @@ private[spark] class PythonRunner(
     // Whether is the worker released into idle pool
     @volatile var released = false
 
-    var numV : Double = 0
+    // flag to check if the time of computation is read
+    var timeObj : Boolean = false
 
+    // dummy variable to store the computation time data sent through the stream as a string
     var strn = new String
 
     // Start a thread to feed the process input from our parent's iterator
@@ -173,68 +171,70 @@ private[spark] class PythonRunner(
     }
     new MonitorThread(env, worker, context).start()
 
+    var checkNum : Boolean = false
+
     // Return an iterator that read lines from the process's stdout
     val stream = new DataInputStream(new BufferedInputStream(worker.getInputStream, bufferSize))
     val stdoutIterator = new Iterator[Array[Byte]] {
       override def next(): Array[Byte] = {
         val obj = _nextObj
+        var ret =  obj
+        checkNum = false
         if (hasNext) {
           _nextObj = read()
+          if(timeObj == true){
+            _nextObj = read()
+            strn = new String(_nextObj, "UTF-8")
+            _nextObj = read()
+          }
+          // if(_nextObj != null)
+          // {
+          //   var s = new String(_nextObj, "UTF-8")
+          //   println("_nextObj is " + s + " and hasNext is " + hasNext)
+          // }
         }
-        obj
+        // if(ret!=null){
+        //   var t = new String(ret, "UTF-8")
+        //   println("ret is " + t)
+        // }
+        // else{
+        //   println("ret is null")
+        // }
+        ret
       }
 
       /* Created this function because the Array 'obj' had some garbage values' */
-      def findTime(str : String) : Boolean = {
+      def findTime(str : String) = {
         var numStr = ""
-        for ( i <- str){
-          if((i >= '0' && i<='9') || (i == '.'))
-          {
-            numStr += i
+        var st : Boolean = false
+        var mul : Boolean = false 
+        var end : Boolean = false
+        val loop1 = new Breaks;
+        var numV : Double = 0
+        loop1.breakable {
+          for ( i <- str){
+            if(i == 's'){   // flag to indicate the start of number in the string recevied. this is done becasue during transmission some garbage values are also sent
+              st = true
+            }
+            if((st == true) && (i == 'm'))
+            {
+              mul = true
+            }
+            if(((i >= '0' && i<='9') || (i == '.')) && (st == true))
+            {
+              numStr += i
+            }
+            if((st == true) && (i=='e')){ // flag to indicate the end of number in the string recevied
+              loop1.break
+            }
           }
         }
-        var ret = false
         numV = numStr.toDouble
-        if (numV > 0) {
-          ret = true
+        if(mul == true){
+          numV/=1000000
         }
-        else{
-          ret = false
-        }
-        ret
+        numV
       }
-      // def findTime(str : String) : Boolean = {
-      //   var numStr = ""
-      //   val fileHandler = new FileWriter(new File("/home/seamus4318/qw/spark/bin/LogFile.txt"),true)
-      //   fileHandler.close()
-      //   val words = str.split(" ")
-      //   for ( i <- 0 to words.length-1){
-      //     if(i== "mAp"){
-      //       numV = i.toDouble
-      //       numV = numV/(scala.math.pow(10,6))
-      //       fileHandler.write(numV.toString+"\n")
-
-      //     }
-      //     // if((i >= '0' && i<='9'))// || (i == '.'))
-      //     // {
-      //     //   numStr += i
-      //     // }
-
-      //   }
-      //   // println("numStr is " + numStr)
-      //   var len = numStr.length()
-      //   var ret = false
-      //   if (len > 0) {
-      //     numV = numStr.toDouble
-      //     numV = numV/(scala.math.pow(10,len+5))
-      //     ret = true
-      //   }
-      //   else{
-      //     ret = false
-      //   }
-      //   ret
-      //   // numV
-      // }
       private def read(): Array[Byte] = {
         if (writerThread.exception.isDefined) {
           throw writerThread.exception.get
@@ -244,11 +244,10 @@ private[spark] class PythonRunner(
             case length if length > 0 =>
               val obj = new Array[Byte](length)
               stream.readFully(obj)
-              strn = new String(obj, "UTF-8")
-              if (SHIVAlog == 1) {
-                logInfo("SHIVA LOG: READFully_obj at time " + System.currentTimeMillis)
-                logInfo(strn)
-              }          
+              // if (SHIVAlog == 1) {
+              //   logInfo("SHIVA LOG: READFully_obj at time " + System.currentTimeMillis)
+              //   logInfo(strn)
+              // }          
               obj
             case 0 => Array.empty[Byte]
             case SpecialLengths.TIMING_DATA =>
@@ -278,6 +277,10 @@ private[spark] class PythonRunner(
 
               throw new PythonException(new String(obj, StandardCharsets.UTF_8),
                 writerThread.exception.getOrElse(null))
+            case SpecialLengths.COMPUTATION_TIME_DATA =>  
+              // to indicate that the next data that will be read from the stream in the computation time data
+              timeObj = true
+              null
             case SpecialLengths.END_OF_DATA_SECTION =>
               // We've finished the data section of the output, but we can still
               // read some accumulator updates:
@@ -295,10 +298,11 @@ private[spark] class PythonRunner(
                   released = true
                 }
               }
-              val checkNum = findTime(strn)
-              if (checkNum == true){
-                PythonRDD.timesList = PythonRDD.timesList ::: List(numV)
+              // var strtime = System.currentTimeMillis
+              if (timeObj == true){
+                PythonRDD.timesList = PythonRDD.timesList ::: List(findTime(strn))
               }
+              // println("SHIVA LOG: Time taken for finding time and adding to list is " + (System.currentTimeMillis - strtime))
               if (SHIVAlog == 1) {
                 logInfo("SHIVA LOG: End of data section")
               }
@@ -323,8 +327,8 @@ private[spark] class PythonRunner(
             throw new SparkException("Python worker exited unexpectedly (crashed)", eof)
         }
       }
-      rstt = System.currentTimeMillis
       if (SHIVAlog == 1) {
+        rstt = System.currentTimeMillis
         logInfo("SHIVA LOG: Read Start Time = " + rstt)
       }
       var _nextObj = read()
@@ -338,7 +342,6 @@ private[spark] class PythonRunner(
       logInfo("SHIVA LOG: Time to read is " + (redt - rstt))
       logInfo("SHIVA LOG: Done Reading")
     }
-    // println("\n\n\nSHIVA LOG: func exec times is " + PythonRDD.timesList + "\n\n\n")
     new InterruptibleIterator(context, stdoutIterator)
   }
 
@@ -535,6 +538,7 @@ private object SpecialLengths {
   val TIMING_DATA = -3
   val END_OF_STREAM = -4
   val NULL = -5
+  val COMPUTATION_TIME_DATA = -6
 }
 
 private[spark] object PythonRDD extends Logging {
@@ -626,15 +630,15 @@ private[spark] object PythonRDD extends Logging {
 
   def writeIteratorToStream[T](iter: Iterator[T], dataOut: DataOutputStream) {
 
-    var tempCount1 : Long = 0
-    var tempCount2 : Long = 0
+    // var tempCount1 : Long = 0
+    // var tempCount2 : Long = 0
     def write(obj: Any): Unit = obj match {
       case null =>
         dataOut.writeInt(SpecialLengths.NULL)
       case arr: Array[Byte] =>
         dataOut.writeInt(arr.length)
         dataOut.write(arr)
-        tempCount1 += 1
+        // tempCount1 += 1
         // if(tempCount1 == 1){
         //   if (SHIVAlog == 1) {
         //     logInfo("SHIVA LOG: Writing Iterator")
@@ -652,25 +656,19 @@ private[spark] object PythonRDD extends Logging {
         // }
       case str: String =>
         writeUTF(str, dataOut)
-        tempCount2 += 1
-        if(tempCount2 == 1){
-          if (SHIVAlog == 1) {
-            logInfo("SHIVA LOG: Writing Iterator")
-            logInfo("SHIVA LOG: Written Iterator DATA is " + str)
-            var t : Long = System.currentTimeMillis
-            logInfo("SHIVA LOG: WT Iterator write " +tempCount2+ " = " + t)
-          }
-        }
-        if(tempCount2 == 100){
-          if (SHIVAlog == 1) {
-            var t : Long = System.currentTimeMillis
-            logInfo("SHIVA LOG: WT Iterator write 100 End Time = " + t)
-          }
-        }
-        tempCount2 +=1
-        // if(tempCount2<= 10){
+        // tempCount2 += 1
+        // if(tempCount2 == 1){
         //   if (SHIVAlog == 1) {
-        //     logInfo("SHIVA LOG: writerThread String is : " + str)
+        //     logInfo("SHIVA LOG: Writing Iterator")
+        //     logInfo("SHIVA LOG: Written Iterator DATA is " + str)
+        //     var t : Long = System.currentTimeMillis
+        //     logInfo("SHIVA LOG: WT Iterator write " +tempCount2+ " = " + t)
+        //   }
+        // }
+        // if(tempCount2 == 100){
+        //   if (SHIVAlog == 1) {
+        //     var t : Long = System.currentTimeMillis
+        //     logInfo("SHIVA LOG: WT Iterator write 100 End Time = " + t)
         //   }
         // }
       case stream: PortableDataStream =>
@@ -686,10 +684,10 @@ private[spark] object PythonRDD extends Logging {
     }
 
     iter.foreach(write)
-    if (SHIVAlog == 1) {
-      logInfo("SHIVA LOG: tempCount1 is " + tempCount1)
-      logInfo("SHIVA LOG: tempCount2 is " + tempCount2)
-    }
+    // if (SHIVAlog == 1) {
+    //   logInfo("SHIVA LOG: tempCount1 is " + tempCount1)
+    //   logInfo("SHIVA LOG: tempCount2 is " + tempCount2)
+    // }
   }
 
   /**

@@ -409,6 +409,7 @@ abstract class RDD[T: ClassTag](
     if (SHIVAlog == 1) {
       logInfo("SHIVA LOG: In filter")
     }
+    logInfo("SHIVA LOG: In filter")
     // new MapPartitionsRDD[T, T](
     //   this,
     //   (context, pid, iter) => iter.filter(cleanF),
@@ -1484,9 +1485,9 @@ abstract class RDD[T: ClassTag](
     val lenOfList : Double = PythonRDD.timesList.length
     val average : Double = (PythonRDD.timesList.sum/PythonRDD.timesList.length)
     println("\n\nSHIVA LOG: Total Time taken for transformation is " + totalTime)
-    // println("SHIVA LOG: Number of elements in list is " + lenOfList) 
+    println("SHIVA LOG: Number of elements in list is " + lenOfList) 
     println("SHIVA LOG: Average time taken by transformation on one partition is " + average)
-    println("\n\n")
+    // println("\n\n")
     // PythonRDD.timesList.foreach(println)
   }
 

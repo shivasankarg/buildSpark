@@ -1,2 +1,2 @@
-/home/seamus4318/qw/spark/sql/catalyst/src/test/java/org/apache/spark/sql/streaming/JavaOutputModeSuite.java
-/home/seamus4318/qw/spark/sql/catalyst/src/test/java/org/apache/spark/sql/catalyst/expressions/XXH64Suite.java
+/home/seamus4318/stash/sparkpa/spark/sql/catalyst/src/test/java/org/apache/spark/sql/catalyst/expressions/XXH64Suite.java
+/home/seamus4318/stash/sparkpa/spark/sql/catalyst/src/test/java/org/apache/spark/sql/streaming/JavaOutputModeSuite.java
